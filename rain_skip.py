@@ -32,12 +32,15 @@ def timer_days(data):
     return pd.concat([season.iloc[::WATER_EVERY] for season in seasons(data)])
 
 
-def rule_days(data):
+def rule_days(data, sensor=False):
     days = []
     for season in seasons(data):
         since = WATER_EVERY  # first watering
         for _, row in season.iterrows():
-            if since >= WATER_EVERY and not recent_rain(row):
+            wet = recent_rain(row)
+            if sensor:
+                wet = wet or row["rain_in"] >= RAIN_LIMIT
+            if since >= WATER_EVERY and not wet:
                 days.append(row)
                 since = 0
             since += 1
@@ -60,11 +63,14 @@ def main():
     print(per_year.to_string())
     print(f"\nTotal: {wasted} of {total} waterings came right after rain ({wasted / total * 100:.1f}%)")
 
-    # rain-aware rule
-    rule = rule_days(data)
-    saved = total - len(rule)
-    print(f"\nRule: water every {WATER_EVERY}+ days, but skip if the last {LOOKBACK} days had {RAIN_LIMIT}+ in of rain")
-    print(f"Rule waterings: {len(rule)} (saves {saved}, or {saved / total * 100:.1f}% of the timer's waterings)")
+    # rain-aware rules
+    print(f"\nRules: water every {WATER_EVERY}+ days, but skip after {RAIN_LIMIT}+ in of rain")
+    for name, sensor in [("past rain only", False), ("knows today's rain", True)]:
+        rule = rule_days(data, sensor)
+        saved = total - len(rule)
+        stormy = int((rule["rain_in"] >= RAIN_LIMIT).sum())
+        print(f"  {name:<19} {len(rule)} waterings, saves {saved} ({saved / total * 100:.1f}%), "
+              f"{stormy} on days with {RAIN_LIMIT}+ in")
 
 
 if __name__ == "__main__":
