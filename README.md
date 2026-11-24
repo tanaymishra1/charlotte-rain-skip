@@ -24,13 +24,30 @@ rain_skip.py simulates both schedules. The timer waters every third day from Apr
 
 charts.py makes the two charts above.
 
+rain_model.py trains the rain model described below, cross-validates it, tests it and draws its ROC curve.
+
 ## Running it
 
 ```
-pip install pandas matplotlib
+pip install pandas matplotlib scikit-learn
 python rain_skip.py
 python charts.py
+python rain_model.py
 ```
+
+## Can a model look ahead?
+
+I also trained a model to guess whether tomorrow will get at least half an inch of rain, using today's weather: rain, temperature, humidity, pressure, wind, dew point and the month. It's a gradient-boosted decision tree model from scikit-learn. I checked it two ways: 5-fold cross-validation on 2016 to 2022, with folds in time order so the model never trains on the future, and a final test on 2023 to 2025.
+
+It didn't work well. Its AUC was 0.63 in cross-validation and 0.61 on the test years, where 0.5 is random guessing and 1.0 is perfect.
+
+![ROC curve for the rain model](figures/rain_model_roc.png)
+
+Accuracy makes it look better than it is. Big rain followed only 7.9% of days, so guessing "no big rain" every day is right 92.1% of the time. A random 50/50 guess is right 50% of the time, and a random guess at the real rate is right 85.4%. The model was right 92.1% of the time at a 50% cutoff, which only ties with always guessing no.
+
+Using it to delay watering didn't help either. With a 20% cutoff, the model told the schedule to wait 11 times, and big rain came only 3 of those times. With a 10% cutoff it waited 66 times and was right 9 times.
+
+I also tried more features, smaller trees, balancing the classes and a logistic regression. None of them got past an AUC of about 0.63 in cross-validation. So predicting tomorrow's rain well isn't really possible with one station's daily numbers. For the irrigation controller, a real weather forecast will probably work better than a model trained only on this data.
 
 ## Limits
 
@@ -38,12 +55,12 @@ The weather data comes from one station at the airport, so it won't match every 
 
 ## What I learned
 
-This was my first time building a simulation. I also learned how to use shift() and groupby() in pandas.
+This was my first time building a simulation. I also learned how to use shift() and groupby() in pandas, and that a model has to beat a simple guess before it's worth using.
 
 ## Next steps
 
-- A machine learning model that predicts tomorrow's rain, to see if looking ahead saves more water than looking back
 - Running the same check for nearby cities
+- Testing a real weather forecast instead of my own rain model
 - Using this as a starting point for my irrigation controller
 
 ## License
