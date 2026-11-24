@@ -12,8 +12,9 @@ LOOKBACK = 2        # days
 
 def load_data():
     data = pd.read_csv(DATA_FILE, parse_dates=["date"])
-    data["rain_recent"] = sum(data["rain_in"].shift(i) for i in range(1, LOOKBACK + 1))
-    data["rain_recent"] = data["rain_recent"].fillna(0)
+    # biggest single day of rain in the days before
+    recent = [data["rain_in"].shift(i) for i in range(1, LOOKBACK + 1)]
+    data["rain_recent"] = pd.concat(recent, axis=1).max(axis=1).fillna(0)
     return data
 
 
@@ -37,7 +38,7 @@ def main():
     total = len(timer)
     wasted = int(timer["after_rain"].sum())
     print(f"Timer: water every {WATER_EVERY} days, months {SEASON_START}-{SEASON_END}")
-    print(f"Counted as after rain: {RAIN_LIMIT}+ in during the {LOOKBACK} days before\n")
+    print(f"Counted as after rain: a day with {RAIN_LIMIT}+ in during the {LOOKBACK} days before\n")
     print(per_year.to_string())
     print(f"\nTotal: {wasted} of {total} waterings came right after rain ({wasted / total * 100:.1f}%)")
 
