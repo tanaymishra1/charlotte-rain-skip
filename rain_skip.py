@@ -26,6 +26,21 @@ def timer_days(data):
     return pd.concat(days)
 
 
+def rule_days(data):
+    days = []
+    for year, season in data.groupby(data["date"].dt.year):
+        season = season[season["date"].dt.month.between(SEASON_START, SEASON_END)]
+        since = WATER_EVERY  # water on day 1
+        for _, row in season.iterrows():
+            if since >= WATER_EVERY:
+                days.append(row)
+                since = 0
+            if row["rain_in"] >= RAIN_LIMIT:
+                since = 0
+            since += 1
+    return pd.DataFrame(days)
+
+
 def main():
     data = load_data()
     timer = timer_days(data)
@@ -41,6 +56,12 @@ def main():
     print(f"Counted as after rain: a day with {RAIN_LIMIT}+ in during the {LOOKBACK} days before\n")
     print(per_year.to_string())
     print(f"\nTotal: {wasted} of {total} waterings came right after rain ({wasted / total * 100:.1f}%)")
+
+    # rain-aware rule
+    rule = rule_days(data)
+    saved = total - len(rule)
+    print(f"\nRule: water when it's been {WATER_EVERY}+ days since the last watering or {RAIN_LIMIT}+ in of rain")
+    print(f"Rule waterings: {len(rule)} (saves {saved}, or {saved / total * 100:.1f}% of the timer's waterings)")
 
 
 if __name__ == "__main__":
