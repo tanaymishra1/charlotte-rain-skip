@@ -12,8 +12,9 @@ LOOKBACK = 2        # days
 
 def load_data():
     data = pd.read_csv(DATA_FILE, parse_dates=["date"])
-    data["rain_recent"] = sum(data["rain_in"].shift(i) for i in range(1, LOOKBACK + 1))
-    data["rain_recent"] = data["rain_recent"].fillna(0)
+    # biggest single day of rain in the days before
+    recent = [data["rain_in"].shift(i) for i in range(1, LOOKBACK + 1)]
+    data["rain_recent"] = pd.concat(recent, axis=1).max(axis=1).fillna(0)
     return data
 
 
@@ -23,6 +24,21 @@ def timer_days(data):
         season = season[season["date"].dt.month.between(SEASON_START, SEASON_END)]
         days.append(season.iloc[::WATER_EVERY])
     return pd.concat(days)
+
+
+def rule_days(data):
+    days = []
+    for year, season in data.groupby(data["date"].dt.year):
+        season = season[season["date"].dt.month.between(SEASON_START, SEASON_END)]
+        since = WATER_EVERY  # water on day 1
+        for _, row in season.iterrows():
+            if since >= WATER_EVERY:
+                days.append(row)
+                since = 0
+            if row["rain_in"] >= RAIN_LIMIT:
+                since = 0
+            since += 1
+    return pd.DataFrame(days)
 
 
 def main():
@@ -37,9 +53,15 @@ def main():
     total = len(timer)
     wasted = int(timer["after_rain"].sum())
     print(f"Timer: water every {WATER_EVERY} days, months {SEASON_START}-{SEASON_END}")
-    print(f"Counted as after rain: {RAIN_LIMIT}+ in during the {LOOKBACK} days before\n")
+    print(f"Counted as after rain: a day with {RAIN_LIMIT}+ in during the {LOOKBACK} days before\n")
     print(per_year.to_string())
     print(f"\nTotal: {wasted} of {total} waterings came right after rain ({wasted / total * 100:.1f}%)")
+
+    # rain-aware rule
+    rule = rule_days(data)
+    saved = total - len(rule)
+    print(f"\nRule: water when it's been {WATER_EVERY}+ days since the last watering or {RAIN_LIMIT}+ in of rain")
+    print(f"Rule waterings: {len(rule)} (saves {saved}, or {saved / total * 100:.1f}% of the timer's waterings)")
 
 
 if __name__ == "__main__":
