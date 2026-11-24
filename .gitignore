@@ -221,3 +221,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# raw NOAA download (too big for the repo)
+data/USW00013881.csv
