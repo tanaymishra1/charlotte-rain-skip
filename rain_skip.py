@@ -10,32 +10,38 @@ RAIN_LIMIT = 0.5    # inches
 LOOKBACK = 2        # days
 
 
-def load_data():
-    data = pd.read_csv(DATA_FILE, parse_dates=["date"])
+def load_data(path=DATA_FILE):
+    data = pd.read_csv(path, parse_dates=["date"])
     # biggest rain
     recent = [data["rain_in"].shift(i) for i in range(1, LOOKBACK + 1)]
     data["rain_recent"] = pd.concat(recent, axis=1).max(axis=1).fillna(0)
     return data
 
 
+def seasons(data):
+    months = data["date"].dt.month.between(SEASON_START, SEASON_END)
+    in_season = data[months]
+    return [season for _, season in in_season.groupby(in_season["date"].dt.year)]
+
+
+def recent_rain(row):
+    return row["rain_recent"] >= RAIN_LIMIT
+
+
 def timer_days(data):
-    days = []
-    for year, season in data.groupby(data["date"].dt.year):
-        season = season[season["date"].dt.month.between(SEASON_START, SEASON_END)]
-        days.append(season.iloc[::WATER_EVERY])
-    return pd.concat(days)
+    return pd.concat([season.iloc[::WATER_EVERY] for season in seasons(data)])
 
 
-def rule_days(data):
+def rule_days(data, sensor=False):
     days = []
-    for year, season in data.groupby(data["date"].dt.year):
-        season = season[season["date"].dt.month.between(SEASON_START, SEASON_END)]
+    for season in seasons(data):
         since = WATER_EVERY  # first watering
         for _, row in season.iterrows():
-            if since >= WATER_EVERY:
+            wet = recent_rain(row)
+            if sensor:
+                wet = wet or row["rain_in"] >= RAIN_LIMIT
+            if since >= WATER_EVERY and not wet:
                 days.append(row)
-                since = 0
-            if row["rain_in"] >= RAIN_LIMIT:
                 since = 0
             since += 1
     return pd.DataFrame(days)
@@ -44,7 +50,7 @@ def rule_days(data):
 def main():
     data = load_data()
     timer = timer_days(data)
-    timer["after_rain"] = timer["rain_recent"] >= RAIN_LIMIT
+    timer["after_rain"] = timer.apply(recent_rain, axis=1)
 
     per_year = timer.groupby(timer["date"].dt.year)["after_rain"].agg(["count", "sum"])
     per_year.columns = ["waterings", "after_rain"]
@@ -57,11 +63,14 @@ def main():
     print(per_year.to_string())
     print(f"\nTotal: {wasted} of {total} waterings came right after rain ({wasted / total * 100:.1f}%)")
 
-    # rain-aware rule
-    rule = rule_days(data)
-    saved = total - len(rule)
-    print(f"\nRule: water when it's been {WATER_EVERY}+ days since the last watering or {RAIN_LIMIT}+ in of rain")
-    print(f"Rule waterings: {len(rule)} (saves {saved}, or {saved / total * 100:.1f}% of the timer's waterings)")
+    # rain-aware rules
+    print(f"\nRules: water every {WATER_EVERY}+ days, but skip after {RAIN_LIMIT}+ in of rain")
+    for name, sensor in [("past rain only", False), ("knows today's rain", True)]:
+        rule = rule_days(data, sensor)
+        saved = total - len(rule)
+        stormy = int((rule["rain_in"] >= RAIN_LIMIT).sum())
+        print(f"  {name:<19} {len(rule)} waterings, saves {saved} ({saved / total * 100:.1f}%), "
+              f"{stormy} on days with {RAIN_LIMIT}+ in")
 
 
 if __name__ == "__main__":

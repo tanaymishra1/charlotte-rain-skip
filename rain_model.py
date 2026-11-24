@@ -3,7 +3,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import roc_auc_score, roc_curve
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 
-from rain_skip import RAIN_LIMIT, SEASON_END, SEASON_START, WATER_EVERY, load_data
+from rain_skip import RAIN_LIMIT, WATER_EVERY, load_data, recent_rain, seasons
 
 TRAIN_END = 2022    # train cutoff
 CHANCES = [1.0, 0.3, 0.2, 0.1]  # wait cutoffs
@@ -25,21 +25,27 @@ def add_features(data):
 
 def simulate(season, chance):
     waterings = 0
+    waits = 0
     bad_waits = 0
     since = WATER_EVERY
+    waited = False
     for _, row in season.iterrows():
-        if since >= WATER_EVERY:
-            # maybe wait
-            if since == WATER_EVERY and row["chance"] >= chance:
-                if row["rain_in"] < RAIN_LIMIT:
+        wet = recent_rain(row) or row["rain_in"] >= RAIN_LIMIT
+        if row["rain_in"] >= RAIN_LIMIT:
+            waited = False
+        if since >= WATER_EVERY and not wet:
+            if not waited and row["chance"] >= chance:
+                # wait once
+                waited = True
+                waits += 1
+                if not row["rain_tomorrow"]:
                     bad_waits += 1
             else:
                 waterings += 1
                 since = 0
-        if row["rain_in"] >= RAIN_LIMIT:
-            since = 0
+                waited = False
         since += 1
-    return waterings, bad_waits
+    return waterings, waits, bad_waits
 
 
 def make_model():
@@ -91,16 +97,17 @@ def main():
     plt.savefig("figures/rain_model_roc.png", dpi=150)
 
     # schedules
-    season = test[test["date"].dt.month.between(SEASON_START, SEASON_END)]
-    print("\nWait if chance >=   waterings   waits with no rain (2023-2025)")
+    print("\nRule that knows today's rain, waiting a day when the model expects rain (2023-2025)")
+    print("Wait if chance >=   waterings   waits   waits with no rain")
     for chance in CHANCES:
-        waterings, bad_waits = 0, 0
-        for year, part in season.groupby(season["date"].dt.year):
-            w, b = simulate(part, chance)
+        waterings, waits, bad_waits = 0, 0, 0
+        for season in seasons(test):
+            w, n, b = simulate(season, chance)
             waterings += w
+            waits += n
             bad_waits += b
         label = "never" if chance >= 1 else chance
-        print(f"{label:>17}   {waterings:>9}   {bad_waits:>10}")
+        print(f"{label:>17}   {waterings:>9}   {waits:>5}   {bad_waits:>18}")
 
 if __name__ == "__main__":
     main()
