@@ -10,52 +10,61 @@ A timer that waters every 3 days from April to October would water 720 times ove
 
 ![Percent of timer waterings that came right after rain, by year](figures/after_rain_by_year.png)
 
-A rule that only waters when it's been 3 days since the garden last got water, from the sprinkler or from real rain, would water 651 times. That saves 69 waterings, or 9.6%.
+I tested two rain-aware rules. Both water when it's been at least 3 days since the last watering, but skip a day if either of the 2 days before had at least half an inch of rain.
 
-![Waterings saved by the rain-aware rule each year](figures/waterings_saved.png)
+- Past rain only: 649 waterings, saving 71 (9.9%)
+- Also knows today's rain, like a controller with a rain sensor: 598 waterings, saving 122 (16.9%)
 
-The part that surprised me most is that gap. About 15% of timer waterings happen right after rain, but skipping them only saves about 10%. A skipped watering doesn't always disappear. Often it just gets pushed back a day or two.
+![Waterings saved by each rule each year](figures/waterings_saved.png)
+
+The past-rain rule saves only about 10%, even though about 15% of timer waterings came right after rain. My first explanation was that skipped waterings just got pushed back a day or two, but that was wrong. The real reason is that the rule can't see rain that hasn't fallen yet. 51 of its 649 waterings land on days that get half an inch or more of rain. Once the rule also knows today's rain, it saves 16.9%, which is more than the 15.4%. So my irrigation controller needs to know about today's rain, not just yesterday's.
 
 ## How it works
 
 prepare_data.py takes NOAA's daily file for Charlotte Douglas Airport, keeps 2016 to 2025 and converts the units. The data folder has its own README with the source and columns.
 
-rain_skip.py simulates both schedules. The timer waters every third day from April 1 to October 31. A watering counts as "right after rain" if either of the 2 days before it had 0.5 inches or more. The rain-aware rule keeps a count of days since the garden last got water and resets it after a watering or a day with 0.5 inches of rain. The settings are at the top of the file if you want to try different numbers.
+rain_skip.py simulates the timer and both rules. The timer waters every third day from April 1 to October 31. All three use the same check for "right after rain": either of the 2 days before had 0.5 inches or more. The rules wait at least 3 days between waterings and skip any day that passes that check. The second rule also skips days that get 0.5 inches or more themselves. The settings are at the top of the file if you want to try different numbers.
 
 charts.py makes the two charts above.
+
+test_rules.py checks the timer, both rules and the model's waiting logic on 10 made-up days where I worked out the answers by hand. GitHub runs these tests on every push.
 
 rain_model.py trains the rain model described below, cross-validates it, tests it and draws its ROC curve.
 
 ## Running it
 
 ```
-pip install pandas matplotlib scikit-learn
+pip install -r requirements.txt
 python rain_skip.py
 python charts.py
 python rain_model.py
+pytest
 ```
 
 ## Can a model look ahead?
 
 I also trained a model to guess whether tomorrow will get at least half an inch of rain, using today's weather: rain, temperature, humidity, pressure, wind, dew point and the month. It's a gradient-boosted decision tree model from scikit-learn. I checked it two ways: 5-fold cross-validation on 2016 to 2022, with folds in time order so the model never trains on the future, and a final test on 2023 to 2025.
 
-It didn't work well. Its AUC was 0.63 in cross-validation and 0.61 on the test years, where 0.5 is random guessing and 1.0 is perfect.
+It didn't work well. Its AUC was 0.63 in cross-validation and 0.61 on the test years, where 0.5 is random guessing and 1.0 is perfect. That's a little better than chance, but not by much.
 
 ![ROC curve for the rain model](figures/rain_model_roc.png)
 
 Accuracy makes it look better than it is. Big rain followed only 7.9% of days, so guessing "no big rain" every day is right 92.1% of the time. A random 50/50 guess is right 50% of the time, and a random guess at the real rate is right 85.4%. The model was right 92.1% of the time at a 50% cutoff, which only ties with always guessing no.
 
-Using it to delay watering didn't help either. With a 20% cutoff, the model told the schedule to wait 11 times, and big rain came only 3 of those times. With a 10% cutoff it waited 66 times and was right 9 times.
+Using it to delay watering didn't help much either. I added it to the rule that knows today's rain: on a day the rule would water, if the model's chance of big rain tomorrow is high enough, it waits one day. If the rain comes, that watering is skipped. On its own, that rule waters 180 times in 2023 to 2025.
 
-I also tried more features, smaller trees, balancing the classes and a logistic regression. None of them got past an AUC of about 0.63 in cross-validation. So predicting tomorrow's rain well isn't really possible with one station's daily numbers. For the irrigation controller, a real weather forecast will probably work better than a model trained only on this data.
+- 20% cutoff: the model waited 9 times, rain came 3 of those times, and it saved 4 waterings
+- 10% cutoff: it waited 56 times but rain came only 7 times. It saved 18 waterings, mostly by making the garden go an extra day without water, not by catching rain
+
+I also tried more features, smaller trees, balancing the classes and a logistic regression. None of them got past an AUC of about 0.63 in cross-validation. So my models couldn't predict tomorrow's rain well from one station's daily numbers. For the irrigation controller, a real weather forecast will probably work better than a model trained only on this data.
 
 ## Limits
 
-The weather data comes from one station at the airport, so it won't match every yard in Charlotte. The simulation only looks at rain. It ignores soil type, heat, sun and what's planted, and it assumes half an inch of rain is enough to skip a watering.
+The weather data comes from one station at the airport, so it won't match every yard in Charlotte. The simulation only looks at rain. It ignores soil type, heat, sun and what's planted, and it assumes half an inch of rain is enough to skip a watering. The data only has daily totals, so the rule that knows today's rain assumes the controller waters late in the day, after the rain has fallen.
 
 ## What I learned
 
-This was my first time building a simulation. I also learned how to use shift() and groupby() in pandas, and that a model has to beat a simple guess before it's worth using.
+This was my first time building a simulation. I also learned how to use shift() and groupby() in pandas, and that a model has to beat a simple guess before it's worth using. The first version of my rule watered on stormy days because it decided to water before looking at that day's rain, so now I check the order of steps and test them on small examples with known answers.
 
 ## Next steps
 
