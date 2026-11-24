@@ -10,8 +10,8 @@ RAIN_LIMIT = 0.5    # inches
 LOOKBACK = 2        # days
 
 
-def load_data():
-    data = pd.read_csv(DATA_FILE, parse_dates=["date"])
+def load_data(path=DATA_FILE):
+    data = pd.read_csv(path, parse_dates=["date"])
     # biggest rain
     recent = [data["rain_in"].shift(i) for i in range(1, LOOKBACK + 1)]
     data["rain_recent"] = pd.concat(recent, axis=1).max(axis=1).fillna(0)
