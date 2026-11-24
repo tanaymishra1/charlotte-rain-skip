@@ -12,7 +12,7 @@ LOOKBACK = 2        # days
 
 def load_data():
     data = pd.read_csv(DATA_FILE, parse_dates=["date"])
-    # biggest single day of rain in the days before
+    # biggest rain
     recent = [data["rain_in"].shift(i) for i in range(1, LOOKBACK + 1)]
     data["rain_recent"] = pd.concat(recent, axis=1).max(axis=1).fillna(0)
     return data
@@ -30,7 +30,7 @@ def rule_days(data):
     days = []
     for year, season in data.groupby(data["date"].dt.year):
         season = season[season["date"].dt.month.between(SEASON_START, SEASON_END)]
-        since = WATER_EVERY  # water on day 1
+        since = WATER_EVERY  # first watering
         for _, row in season.iterrows():
             if since >= WATER_EVERY:
                 days.append(row)
