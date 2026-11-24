@@ -4,6 +4,8 @@ How often does a sprinkler timer in Charlotte, NC water right after it already r
 
 I made this as a starting point for a bigger project I have in mind: an irrigation controller that decides when to water using weather and soil data. I wanted some experience with this kind of weather data first.
 
+I used an AI assistant to help write and review the code.
+
 ## Results
 
 A timer that waters every 3 days from April to October would water 720 times over the 10 seasons. 111 of those waterings (15.4%) came right after a day with at least half an inch of rain.
