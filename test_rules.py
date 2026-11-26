@@ -47,3 +47,18 @@ def test_model_waits(tmp_path):
     # bad wait
     season.loc[season["date"].dt.day == 1, "chance"] = 0.9
     assert simulate(season, 0.5) == (1, 2, 1)
+
+
+def test_march_lookback(tmp_path):
+    # rain Mar 31
+    dates = pd.date_range("2024-03-30", periods=8)
+    rain = [0, 0.8, 0, 0, 0, 0, 0, 0]
+    path = tmp_path / "march.csv"
+    pd.DataFrame({"date": dates, "rain_in": rain}).to_csv(path, index=False)
+    data = load_data(path)
+
+    timer = timer_days(data)
+    assert days(timer) == [1, 4]
+    assert list(timer.apply(recent_rain, axis=1)) == [True, False]
+    assert days(rule_days(data)) == [3, 6]
+    assert days(rule_days(data, sensor=True)) == [3, 6]
