@@ -29,7 +29,7 @@ rain_skip.py simulates the timer and both rules. The timer waters every third da
 
 charts.py makes the two charts above.
 
-test_rules.py checks the timer, both rules and the model's waiting logic on 10 made-up days where I worked out the answers by hand. GitHub runs these tests on every push.
+test_rules.py checks the timer, both rules and the model's waiting logic on 10 made-up days where I worked out the answers by hand. There's also a check that rain at the end of March still counts for April 1. GitHub runs these tests on every push.
 
 rain_model.py trains the rain model described below, cross-validates it, tests it and draws its ROC curve.
 
@@ -55,8 +55,11 @@ Accuracy makes it look better than it is. Big rain followed only 7.9% of days, s
 
 Using it to delay watering didn't help much either. I added it to the rule that knows today's rain: on a day the rule would water, if the model's chance of big rain tomorrow is high enough, it waits one day. If the rain comes, that watering is skipped. On its own, that rule waters 180 times in 2023 to 2025.
 
-- 20% cutoff: the model waited 9 times, rain came 3 of those times, and it saved 4 waterings
-- 10% cutoff: it waited 56 times but rain came only 7 times. It saved 18 waterings, mostly by making the garden go an extra day without water, not by catching rain
+- 30% cutoff: it waited once, rain didn't come, and nothing was saved
+- 20% cutoff: it waited 9 times and rain came 3 times. It watered 4 fewer times, but the garden also went 6 extra days without water
+- 10% cutoff: it waited 56 times and rain came only 7 times. It watered 18 fewer times, but most of that came from the garden going 49 extra days without water
+
+Only the waits where rain really came count as savings. At best that's 7 waterings over three seasons, and it cost 49 dry days to get there.
 
 I also tried more features, smaller trees, balancing the classes and a logistic regression. None of them got past an AUC of about 0.63 in cross-validation. So my models couldn't predict tomorrow's rain well from one station's daily numbers. For the irrigation controller, a real weather forecast will probably work better than a model trained only on this data.
 
