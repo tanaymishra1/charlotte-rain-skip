@@ -98,7 +98,8 @@ def main():
 
     # schedules
     print("\nRule that knows today's rain, waiting a day when the model expects rain (2023-2025)")
-    print("Wait if chance >=   waterings   waits   waits with no rain")
+    print("Wait if chance >=   waterings   saved   waits   rain caught   extra dry days")
+    baseline = None
     for chance in CHANCES:
         waterings, waits, bad_waits = 0, 0, 0
         for season in seasons(test):
@@ -106,8 +107,13 @@ def main():
             waterings += w
             waits += n
             bad_waits += b
+        if baseline is None:
+            baseline = waterings  # never wait
+        saved = baseline - waterings
+        caught = waits - bad_waits
         label = "never" if chance >= 1 else chance
-        print(f"{label:>17}   {waterings:>9}   {waits:>5}   {bad_waits:>18}")
+        print(f"{label:>17}   {waterings:>9}   {saved:>5}   {waits:>5}   "
+              f"{caught:>11}   {bad_waits:>14}")
 
 if __name__ == "__main__":
     main()
