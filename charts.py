@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
 from rain_skip import load_data, recent_rain, rule_days, timer_days
+from water_balance import add_water_loss, compare
 
 
 def main():
@@ -39,6 +40,24 @@ def main():
     plt.legend()
     plt.tight_layout()
     plt.savefig("figures/waterings_saved.png", dpi=150)
+
+    # chart 3
+    results = compare(add_water_loss(data))
+    names = list(results)[::-1]
+    seasons_count = len(years)
+    used = [(results[n][1] - results[n][2]) / seasons_count for n in names]
+    wasted = [results[n][2] / seasons_count for n in names]
+    plt.figure(figsize=(8, 4))
+    plt.barh(names, used, color="#4a9b5f", label="Used by the lawn")
+    plt.barh(names, wasted, left=used, color="#b0b0b0", label="Ran off")
+    for i, (u, w) in enumerate(zip(used, wasted, strict=True)):
+        plt.text(u + w + 0.4, i, f"{u + w:.1f} in", va="center")
+    plt.title("Watering per season, Apr-Oct (average of 2016-2025)")
+    plt.xlabel("Inches of water")
+    plt.xlim(0, max(u + w for u, w in zip(used, wasted, strict=True)) * 1.15)
+    plt.legend(loc="lower right")
+    plt.tight_layout()
+    plt.savefig("figures/water_used.png", dpi=150)
 
     print("Saved charts to figures/")
 
