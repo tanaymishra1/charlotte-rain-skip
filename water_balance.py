@@ -1,5 +1,7 @@
 import numpy as np
 
+from rain_skip import load_data, rule_days, seasons, timer_days
+
 # airport station
 LATITUDE = 35.22
 
@@ -62,3 +64,49 @@ def on_schedule(dates):
 
 def when_dry(row, short):
     return short >= REFILL_AT
+
+
+def compare(data):
+    schedules = {
+        "Timer": on_schedule(timer_days(data)["date"]),
+        "Past rain only": on_schedule(rule_days(data)["date"]),
+        "Knows today's rain": on_schedule(rule_days(data, sensor=True)["date"]),
+        "Soil rule": when_dry,
+    }
+    results = {}
+    for name, rule in schedules.items():
+        waterings, applied, wasted, dry_days = 0, 0, 0, 0
+        for season in seasons(data):
+            a, w, d, watered = soil_check(season, rule)
+            waterings += len(watered)
+            applied += a
+            wasted += w
+            dry_days += d
+        results[name] = (waterings, applied, wasted, dry_days)
+    return results
+
+
+def main():
+    data = add_water_loss(load_data())
+    in_season = seasons(data)
+    years = len(in_season)
+    loss = sum(season["water_loss_in"].sum() for season in in_season) / years
+    rain = sum(season["rain_in"].sum() for season in in_season) / years
+
+    print(f"Lawn water loss, Apr-Oct: {loss:.1f} in per season (crop factor {CROP_FACTOR})")
+    print(f"Rain, Apr-Oct: {rain:.1f} in per season")
+    print(f"Each watering: {WATER_AMOUNT} in. Soil rule waters when {REFILL_AT} in short.")
+    print(f"Dry day: soil more than {DRY_LIMIT} in short\n")
+
+    results = compare(data)
+    timer_applied = results["Timer"][1]
+    print("Schedule             waterings   applied   wasted   dry days   vs timer")
+    for name, (waterings, applied, wasted, dry_days) in results.items():
+        less = "" if name == "Timer" else f"{(1 - applied / timer_applied) * 100:.1f}% less"
+        print(f"{name:<19}  {waterings:>9}   {applied:>7.1f}   {wasted:>6.1f}   "
+              f"{dry_days:>8}   {less}")
+    print(f"\n2016-2025, {years} seasons. Water amounts in inches.")
+
+
+if __name__ == "__main__":
+    main()
