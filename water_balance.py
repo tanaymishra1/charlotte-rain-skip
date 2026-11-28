@@ -6,6 +6,11 @@ LATITUDE = 35.22
 # lawn grass
 CROP_FACTOR = 0.8
 
+# soil bucket, inches
+WATER_AMOUNT = 0.5
+REFILL_AT = 0.5
+DRY_LIMIT = 1.0
+
 
 def sun_energy(day, latitude):
     # FAO-56 method
@@ -30,3 +35,30 @@ def add_water_loss(data):
     energy = sun_energy(data["date"].dt.dayofyear, LATITUDE)
     data["water_loss_in"] = daily_et(data["tmax_f"], data["tmin_f"], energy) * CROP_FACTOR
     return data
+
+
+def soil_check(season, should_water):
+    short = 0
+    applied, wasted, dry_days = 0, 0, 0
+    watered = []
+    for _, row in season.iterrows():
+        # rain refills
+        short = max(short + row["water_loss_in"] - row["rain_in"], 0)
+        if should_water(row, short):
+            watered.append(row["date"])
+            applied += WATER_AMOUNT
+            # runs off
+            wasted += max(WATER_AMOUNT - short, 0)
+            short = max(short - WATER_AMOUNT, 0)
+        if short > DRY_LIMIT:
+            dry_days += 1
+    return applied, wasted, dry_days, watered
+
+
+def on_schedule(dates):
+    dates = set(dates)
+    return lambda row, short: row["date"] in dates
+
+
+def when_dry(row, short):
+    return short >= REFILL_AT
